@@ -9,7 +9,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Fetch and populate updated rates
+      - name: Fetch and insert rates
+        bash: shell
+        env:
+          PUSHOVER_APP_TOKEN: ${{ secrets.PUSHOVER_APP_TOKEN }}
+          PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
         run: |
           ./fetch-parse-insert.sh
           if [[ `git status --porcelain` ]]; then
