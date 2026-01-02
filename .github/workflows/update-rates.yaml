@@ -10,7 +10,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Fetch and insert rates
-        bash: shell
+        shell: bash
         env:
           PUSHOVER_APP_TOKEN: ${{ secrets.PUSHOVER_APP_TOKEN }}
           PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
