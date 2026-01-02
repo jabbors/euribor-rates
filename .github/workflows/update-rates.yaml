@@ -11,7 +11,7 @@ jobs:
           fetch-depth: 0
       - name: Fetch and populate updated rates
         run: |
-          fetch-parse-insert.sh
+          ./fetch-parse-insert.sh
           if [[ `git status --porcelain` ]]; then
             gh run cancel ${{ github.run_id }}
             exit 1
