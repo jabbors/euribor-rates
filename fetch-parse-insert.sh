@@ -115,6 +115,6 @@ done
 
 now=$(date -R)
 last_inserted=$(last_inserted_time 1w)
-title="gorates pull at ${now} for ${last_inserted}"
+title="Euribor rates pull at ${now} for ${last_inserted}"
 summary=$(IFS=$'\n' eval 'echo "${summaries[*]}"')
 notify_pushover "$title" "$summary"
