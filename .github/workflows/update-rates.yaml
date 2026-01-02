@@ -1,0 +1,25 @@
+name: Update rates
+on:
+  schedule:
+    - cron: 0 15 * * 2,3,4,5,6
+jobs:
+  update-euribor-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch and populate updated rates
+        run: |
+          fetch-parse-insert.sh
+          if [[ `git status --porcelain` ]]; then
+            gh run cancel ${{ github.run_id }}
+            exit 1
+          fi
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: master
