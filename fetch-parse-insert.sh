@@ -41,19 +41,25 @@ fetch_page() {
     fi
 }
 
-parse_date() {
+get_rates() {
     maturity=$1
+    first=1
     page="euribor-rate-${maturity}"
     file="/tmp/${page}"
-    parsed_date=$(cat ${file} | grep "By day" -A 8 | grep -o -e "[0-9]\{1,2\}/[0-9]\{1,2\}/[0-9]\{4\}" -m 1 | tr '/' '-')
-    date_normalized "$parsed_date"
-}
-
-parse_rate() {
-    maturity=$1
-    page="euribor-rate-${maturity}"
-    file="/tmp/${page}"
-    cat ${file} | grep "By day" -A 8 | grep -o -e "-\?[0-9]\{1,2\}\.[0-9]\{3\}" -m 1
+    data=$(cat ${file} | grep "By day" -A 10 | grep "<tr><td>")
+    while IFS= read -r line; do
+        date=$(grep -o -e  "[0-9]\{1,2\}/[0-9]\{1,2\}/[0-9]\{4\}" <<< "$line")
+        value=$(grep -o -e "-\?[0-9]\{1,2\}\.[0-9]\{3\}" <<< "$line")
+        if [[ -n $date && -n $value ]]; then
+            if (( first )); then
+                result="$date=$value"
+                first=0
+            else
+                result="$result $date=$value"
+            fi
+        fi
+    done <<< "${data}"
+    echo "${result}"
 }
 
 last_inserted_time() {
@@ -67,7 +73,7 @@ populate_csv_files() {
     date=$2
     rate=$3
     file="${DATA_PATH}/rate-${maturity}.csv"
-    echo "append line' ${date},${rate}' to ${file}"
+    echo "append line '${date},${rate}' to ${file}"
     echo "${date},${rate}" >> ${file}
 }
 
@@ -78,12 +84,21 @@ short_maturity_string() {
 
 date_normalized() {
     date=$1
-    year=$(echo ${date} | cut -d '-' -f3)
-    month=$(echo ${date} | cut -d '-' -f1)
+    year=$(echo ${date} | cut -d '/' -f3)
+    month=$(echo ${date} | cut -d '/' -f1)
     if [ ${#month} -eq 1 ]; then month="0$month"; fi;
-    day=$(echo ${date} | cut -d '-' -f2)
+    day=$(echo ${date} | cut -d '/' -f2)
     if [ ${#day} -eq 1 ]; then day="0$day"; fi;
     echo "${year}-${month}-${day}"
+}
+
+date_to_epoch() {
+  local date=$1
+  if date -d "${date}" +%s >/dev/null 2>&1; then
+    date -d "${date}" +%s
+  else
+    date -j -f "%Y-%m-%d" "${date}" +%s
+  fi
 }
 
 rm -f /tmp/euribor*
@@ -93,24 +108,36 @@ summaries=()
 for maturity in 1-week 1-month 3-months 6-months 12-months
 do
     echo "processing maturity ${maturity}"
-    fetch_page ${maturity}
-    date=$(parse_date ${maturity})
-    if [ ${#date} -ne 10 ]
-    then
-        summaries+=("rate ${maturity} skipped" "no date found, something might be wrong")
-        echo "no date found, something might be wrong"
-        continue
-    fi
-    rate=$(parse_rate $maturity)
     last_inserted=$(last_inserted_time ${maturity})
-    if [ "${last_inserted}" == "${date}" ]
-    then
-        summaries+=("rate ${maturity} ignored, data for ${date} already inserted")
-        echo "data for ${date} already inserted"
+    fetch_page ${maturity}
+    rates=$(get_rates $maturity)
+    if [ -z "${rates}" ]; then
+        summaries+=("no rates found for ${maturity}")
+        echo "no rates found for ${maturity}"
         continue
     fi
-    populate_csv_files ${maturity} ${date} ${rate}
-    summaries+=("inserted rate ${maturity}")
+    latest_date=$(echo ${rates} | cut -d ' ' -f 1 | cut -d '=' -f1)
+    latest_date_normalized=$(date_normalized $latest_date)
+    if [ "${last_inserted}" == "${latest_date_normalized}" ]
+    then
+        summaries+=("rate ${maturity} ignored, data for ${latest_date_normalized} already inserted")
+        echo "data for ${latest_date_normalized} already inserted"
+        continue
+    fi
+    # Loop over rates in reverse order
+    set -- $rates
+    for (( i=$#; i>0; i-- )); do
+        key=$(eval "echo \${$i}" | cut -d '=' -f1)
+        date=$(date_normalized $key)
+        last_inserted_epoch=$(date_to_epoch ${last_inserted})
+        date_epoch=$(date_to_epoch ${date})
+        if [ ${date_epoch} -le ${last_inserted_epoch} ]; then
+            continue
+        fi
+        rate=$(eval "echo \${$i}" | cut -d '=' -f2)
+        populate_csv_files ${maturity} ${date} ${rate}
+        summaries+=("inserted rate for ${date} ${maturity}")
+    done
 done
 
 now=$(date -R)
