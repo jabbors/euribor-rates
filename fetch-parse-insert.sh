@@ -85,9 +85,9 @@ short_maturity_string() {
 date_normalized() {
     date=$1
     year=$(echo ${date} | cut -d '/' -f3)
-    month=$(echo ${date} | cut -d '/' -f1)
+    month=$(echo ${date} | cut -d '/' -f2)
     if [ ${#month} -eq 1 ]; then month="0$month"; fi;
-    day=$(echo ${date} | cut -d '/' -f2)
+    day=$(echo ${date} | cut -d '/' -f1)
     if [ ${#day} -eq 1 ]; then day="0$day"; fi;
     echo "${year}-${month}-${day}"
 }
